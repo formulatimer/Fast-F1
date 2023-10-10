@@ -210,10 +210,7 @@ class Telemetry(pd.DataFrame):
 
     @property
     def _constructor(self):
-        def _new(*args, **kwargs):
-            return Telemetry(*args, **kwargs).__finalize__(self)
-
-        return _new
+        return Telemetry
 
     @property
     def base_class_view(self):
@@ -1584,7 +1581,8 @@ class Session:
             })
 
             # add generated laps at the end and fix sorting at the end
-            self._laps = pd.concat([self._laps, new_last])
+            self._laps = (pd.concat([self._laps, new_last])
+                          .__finalize__(self._laps))
             any_new = True
 
         if any_new:
@@ -2468,23 +2466,21 @@ class Laps(pd.DataFrame):
 
     @property
     def _constructor(self):
-        def _new(*args, **kwargs):
-            return Laps(*args, **kwargs).__finalize__(self)
-
-        return _new
+        return Laps
 
     @property
     def _constructor_sliced(self):
-        def _new(*args, **kwargs):
-            name = kwargs.get('name')
-            if name and (name in self.columns):
-                # vertical slice
-                return pd.Series(*args, **kwargs).__finalize__(self)
+        return Lap
 
+    def _constructor_sliced_from_mgr(self, mgr, axes):
+        if axes[0] is self.index:
             # horizontal slice
-            return Lap(*args, **kwargs).__finalize__(self)
+            ser = pd.Series._from_mgr(mgr, axes)
+            ser._name = None  # caller is responsible for setting real name
+            return ser
 
-        return _new
+        # vertical slice
+        return super()._constructor_sliced_from_mgr(mgr, axes)
 
     @property
     def base_class_view(self):
@@ -3421,23 +3417,21 @@ class SessionResults(pd.DataFrame):
 
     @property
     def _constructor(self):
-        def _new(*args, **kwargs):
-            return SessionResults(*args, **kwargs).__finalize__(self)
-
-        return _new
+        return SessionResults
 
     @property
     def _constructor_sliced(self):
-        def _new(*args, **kwargs):
-            name = kwargs.get('name')
-            if name and (name in self.columns):
-                # vertical slice
-                return pd.Series(*args, **kwargs).__finalize__(self)
+        return DriverResult
 
+    def _constructor_sliced_from_mgr(self, mgr, axes):
+        if axes[0] is self.index:
             # horizontal slice
-            return DriverResult(*args, **kwargs).__finalize__(self)
+            ser = pd.Series._from_mgr(mgr, axes)
+            ser._name = None  # caller is responsible for setting real name
+            return ser
 
-        return _new
+        # vertical slice
+        return super()._constructor_sliced_from_mgr(mgr, axes)
 
     @property
     def base_class_view(self):

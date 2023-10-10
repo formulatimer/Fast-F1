@@ -165,23 +165,21 @@ class ErgastResultFrame(pd.DataFrame):
 
     @property
     def _constructor(self):
-        def _new(*args, **kwargs):
-            return ErgastResultFrame(*args, **kwargs).__finalize__(self)
-
-        return _new
+        return ErgastResultFrame
 
     @property
     def _constructor_sliced(self):
-        def _new(*args, **kwargs):
-            name = kwargs.get('name')
-            if name and (name in self.columns):
-                # vertical slice
-                return pd.Series(*args, **kwargs).__finalize__(self)
+        return ErgastResultSeries
 
+    def _constructor_sliced_from_mgr(self, mgr, axes):
+        if axes[0] is self.index:
             # horizontal slice
-            return ErgastResultSeries(*args, **kwargs).__finalize__(self)
+            ser = pd.Series._from_mgr(mgr, axes)
+            ser._name = None  # caller is responsible for setting real name
+            return ser
 
-        return _new
+        # vertical slice
+        return super()._constructor_sliced_from_mgr(mgr, axes)
 
     @property
     def base_class_view(self):
@@ -202,10 +200,7 @@ class ErgastResultSeries(pd.Series):
 
     @property
     def _constructor(self):
-        def _new(*args, **kwargs):
-            return ErgastResultSeries(*args, **kwargs).__finalize__(self)
-
-        return _new
+        return ErgastResultSeries
 
 
 class ErgastRawResponse(ErgastResponseMixin, list):

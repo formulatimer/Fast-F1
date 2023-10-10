@@ -810,17 +810,21 @@ class EventSchedule(pd.DataFrame):
 
     @property
     def _constructor(self):
-        def _new(*args, **kwargs):
-            return EventSchedule(*args, **kwargs).__finalize__(self)
-
-        return _new
+        return EventSchedule
 
     @property
     def _constructor_sliced(self):
-        def _new(*args, **kwargs):
-            return Event(*args, **kwargs).__finalize__(self)
+        return Event
 
-        return _new
+    def _constructor_sliced_from_mgr(self, mgr, axes):
+        if axes[0] is self.index:
+            # horizontal slice
+            ser = pd.Series._from_mgr(mgr, axes)
+            ser._name = None  # caller is responsible for setting real name
+            return ser
+
+        # vertical slice
+        return super()._constructor_sliced_from_mgr(mgr, axes)
 
     @property
     def base_class_view(self):
@@ -954,10 +958,7 @@ class Event(pd.Series):
 
     @property
     def _constructor(self):
-        def _new(*args, **kwargs):
-            return Event(*args, **kwargs).__finalize__(self)
-
-        return _new
+        return Event
 
     def is_testing(self) -> bool:
         """Return `True` or `False`, depending on whether this event is a
