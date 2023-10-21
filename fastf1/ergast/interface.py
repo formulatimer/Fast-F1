@@ -4,10 +4,8 @@ from typing import List, Literal, Optional, Union
 
 from fastf1.req import Cache
 import fastf1.ergast.structure as API
+from fastf1.internals.pandas_base import BaseDataFrame, BaseSeries
 from fastf1.version import __version__
-
-
-import pandas as pd
 
 
 BASE_URL = 'https://ergast.com/api/f1'
@@ -101,7 +99,7 @@ class ErgastResponseMixin:
         )
 
 
-class ErgastResultFrame(pd.DataFrame):
+class ErgastResultFrame(BaseDataFrame):
     """
     Wraps a Pandas ``DataFrame``. Additionally, this class can be
     initialized from Ergast response data with automatic flattening and type
@@ -117,7 +115,7 @@ class ErgastResultFrame(pd.DataFrame):
         auto_cast: Determines if values are automatically cast to the most
             appropriate data type from their original string representation
     """
-    _internal_names = pd.DataFrame._internal_names + ['base_class_view']
+    _internal_names = BaseDataFrame._internal_names + ['base_class_view']
     _internal_names_set = set(_internal_names)
 
     def __init__(self, data=None, *,
@@ -164,43 +162,17 @@ class ErgastResultFrame(pd.DataFrame):
         return nested, flat
 
     @property
-    def _constructor(self):
-        return ErgastResultFrame
-
-    @property
-    def _constructor_sliced(self):
+    def _constructor_sliced_horizontal(self):
         return ErgastResultSeries
 
-    def _constructor_sliced_from_mgr(self, mgr, axes):
-        if axes[0] is self.index:
-            # horizontal slice
-            ser = pd.Series._from_mgr(mgr, axes)
-            ser._name = None  # caller is responsible for setting real name
-            return ser
 
-        # vertical slice
-        return super()._constructor_sliced_from_mgr(mgr, axes)
-
-    @property
-    def base_class_view(self):
-        """For a nicer debugging experience; can view DataFrame through
-        this property in various IDEs"""
-        return pd.DataFrame(self)
-
-
-class ErgastResultSeries(pd.Series):
+class ErgastResultSeries(BaseSeries):
     """
     Wraps a Pandas ``Series``.
 
     Currently, no extra functionality is implemented.
     """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    @property
-    def _constructor(self):
-        return ErgastResultSeries
+    pass
 
 
 class ErgastRawResponse(ErgastResponseMixin, list):
@@ -268,6 +240,13 @@ class ErgastSimpleResponse(ErgastResponseMixin, ErgastResultFrame):
         ErgastResultFrame._internal_names \
         + ErgastResponseMixin._internal_names
     _internal_names_set = set(_internal_names)
+
+    @property
+    def _constructor(self):
+        # drop from ErgastSimpleResponse to ErgastResultFrame, removing the
+        # ErgastResponseMixin because a slice of the data is no longer a full
+        # response and pagination, ... is therefore not supported any more
+        return ErgastResultFrame
 
 
 class ErgastMultiResponse(ErgastResponseMixin):

@@ -44,7 +44,7 @@ import re
 from functools import cached_property
 import warnings
 import typing
-from typing import Optional, List, Literal, Iterable, Union, Tuple, Any
+from typing import Optional, List, Literal, Iterable, Union, Tuple, Any, Type
 
 import numpy as np
 import pandas as pd
@@ -52,6 +52,7 @@ import pandas as pd
 import fastf1
 from fastf1 import _api as api
 from fastf1 import ergast
+from fastf1.internals.pandas_base import BaseDataFrame, BaseSeries
 from fastf1.mvapi import get_circuit_info, CircuitInfo
 from fastf1.logger import get_logger, soft_exceptions
 from fastf1.utils import to_timedelta
@@ -2271,7 +2272,7 @@ class Session:
             self._t0_date = date_offset.round('ms')
 
 
-class Laps(pd.DataFrame):
+class Laps(BaseDataFrame):
     """Object for accessing lap (timing) data of multiple laps.
 
     Args:
@@ -2425,8 +2426,7 @@ class Laps(pd.DataFrame):
     }
 
     _metadata = ['session']
-    _internal_names = pd.DataFrame._internal_names \
-        + ['base_class_view', 'telemetry']
+    _internal_names = BaseDataFrame._internal_names + ['telemetry']
     _internal_names_set = set(_internal_names)
 
     QUICKLAP_THRESHOLD = 1.07
@@ -2465,28 +2465,8 @@ class Laps(pd.DataFrame):
         self.session = session
 
     @property
-    def _constructor(self):
-        return Laps
-
-    @property
-    def _constructor_sliced(self):
+    def _constructor_sliced_horizontal(self) -> Type["Lap"]:
         return Lap
-
-    def _constructor_sliced_from_mgr(self, mgr, axes):
-        if axes[0] is self.index:
-            # horizontal slice
-            ser = pd.Series._from_mgr(mgr, axes)
-            ser._name = None  # caller is responsible for setting real name
-            return ser
-
-        # vertical slice
-        return super()._constructor_sliced_from_mgr(mgr, axes)
-
-    @property
-    def base_class_view(self):
-        """For a nicer debugging experience; can now view as
-        dataframe in various IDEs"""
-        return pd.DataFrame(self)
 
     @cached_property
     def telemetry(self) -> Telemetry:
@@ -3086,25 +3066,15 @@ class Laps(pd.DataFrame):
             yield index, lap
 
 
-class Lap(pd.Series):
+class Lap(BaseSeries):
     """Object for accessing lap (timing) data of a single lap.
 
     This class wraps :class:`pandas.Series`. It provides extra functionality for accessing a lap's associated
     telemetry data.
     """
     _metadata = ['session']
-    _internal_names = pd.Series._internal_names + ['telemetry']
+    _internal_names = BaseSeries._internal_names + ['telemetry']
     _internal_names_set = set(_internal_names)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    @property
-    def _constructor(self):
-        def _new(*args, **kwargs):
-            return Lap(*args, **kwargs).__finalize__(self)
-
-        return _new
 
     @cached_property
     def telemetry(self) -> Telemetry:
@@ -3255,7 +3225,7 @@ class Lap(pd.Series):
         return pd.Series(index=self.session.weather_data.columns)
 
 
-class SessionResults(pd.DataFrame):
+class SessionResults(BaseDataFrame):
     """This class provides driver and result information for all drivers that
     participated in a session.
 
@@ -3391,9 +3361,6 @@ class SessionResults(pd.DataFrame):
         'Points': 'float64'
     }
 
-    _internal_names = pd.DataFrame._internal_names + ['base_class_view']
-    _internal_names_set = set(_internal_names)
-
     def __init__(self, *args, force_default_cols: bool = False, **kwargs):
         if force_default_cols:
             kwargs['columns'] = list(self._COL_TYPES.keys())
@@ -3412,35 +3379,12 @@ class SessionResults(pd.DataFrame):
 
                 self[col] = self[col].astype(_type)
 
-    def __repr__(self):
-        return self.base_class_view.__repr__()
-
     @property
-    def _constructor(self):
-        return SessionResults
-
-    @property
-    def _constructor_sliced(self):
+    def _constructor_sliced_horizontal(self) -> Type["DriverResult"]:
         return DriverResult
 
-    def _constructor_sliced_from_mgr(self, mgr, axes):
-        if axes[0] is self.index:
-            # horizontal slice
-            ser = pd.Series._from_mgr(mgr, axes)
-            ser._name = None  # caller is responsible for setting real name
-            return ser
 
-        # vertical slice
-        return super()._constructor_sliced_from_mgr(mgr, axes)
-
-    @property
-    def base_class_view(self):
-        """For a nicer debugging experience; can view DataFrame through
-        this property in various IDEs"""
-        return pd.DataFrame(self)
-
-
-class DriverResult(pd.Series):
+class DriverResult(BaseSeries):
     """This class provides driver and result information for a single driver.
 
     This class subclasses a :class:`pandas.Series` and the usual methods
@@ -3459,18 +3403,8 @@ class DriverResult(pd.Series):
     .. versionadded:: 2.2
     """
 
-    _internal_names = pd.DataFrame._internal_names + ['dnf']
+    _internal_names = BaseSeries._internal_names + ['dnf']
     _internal_names_set = set(_internal_names)
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    @property
-    def _constructor(self):
-        def _new(*args, **kwargs):
-            return DriverResult(*args, **kwargs).__finalize__(self)
-
-        return _new
 
     @property
     def dnf(self) -> bool:

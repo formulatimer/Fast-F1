@@ -163,7 +163,7 @@ import collections
 import datetime
 import json
 import warnings
-from typing import Literal, Union, Optional
+from typing import Callable, Literal, Union, Optional
 
 import dateutil.parser
 
@@ -180,6 +180,7 @@ import pandas as pd
 import fastf1._api
 from fastf1.core import Session
 import fastf1.ergast
+from fastf1.internals.pandas_base import BaseSeries, BaseDataFrame
 from fastf1.logger import get_logger, soft_exceptions
 from fastf1.req import Cache
 from fastf1.utils import recursive_dict_get, to_datetime, to_timedelta
@@ -733,7 +734,7 @@ def _get_schedule_from_ergast(year) -> "EventSchedule":
     return schedule
 
 
-class EventSchedule(pd.DataFrame):
+class EventSchedule(BaseDataFrame):
     """This class implements a per-season event schedule.
 
     For detailed information about the information that is available for each
@@ -782,9 +783,6 @@ class EventSchedule(pd.DataFrame):
 
     _metadata = ['year']
 
-    _internal_names = pd.DataFrame._internal_names + ['base_class_view']
-    _internal_names_set = set(_internal_names)
-
     def __init__(self, *args, year: int = 0,
                  force_default_cols: bool = False, **kwargs):
         if force_default_cols:
@@ -805,32 +803,9 @@ class EventSchedule(pd.DataFrame):
                     self[col] = _type()
             self[col] = self[col].astype(_type)
 
-    def __repr__(self):
-        return self.base_class_view.__repr__()
-
     @property
-    def _constructor(self):
-        return EventSchedule
-
-    @property
-    def _constructor_sliced(self):
+    def _constructor_sliced_horizontal(self) -> Callable[..., "Event"]:
         return Event
-
-    def _constructor_sliced_from_mgr(self, mgr, axes):
-        if axes[0] is self.index:
-            # horizontal slice
-            ser = pd.Series._from_mgr(mgr, axes)
-            ser._name = None  # caller is responsible for setting real name
-            return ser
-
-        # vertical slice
-        return super()._constructor_sliced_from_mgr(mgr, axes)
-
-    @property
-    def base_class_view(self):
-        """For a nicer debugging experience; can view DataFrame through
-        this property in various IDEs"""
-        return pd.DataFrame(self)
 
     def is_testing(self):
         """Return `True` or `False`, depending on whether each event is a
@@ -935,7 +910,7 @@ class EventSchedule(pd.DataFrame):
             return self._fuzzy_event_search(name)
 
 
-class Event(pd.Series):
+class Event(BaseSeries):
     """This class represents a single event (race weekend or testing event).
 
     Each event consists of one or multiple sessions, depending on the type
@@ -955,10 +930,6 @@ class Event(pd.Series):
     def __init__(self, *args, year: int = None, **kwargs):
         super().__init__(*args, **kwargs)
         self.year = year
-
-    @property
-    def _constructor(self):
-        return Event
 
     def is_testing(self) -> bool:
         """Return `True` or `False`, depending on whether this event is a
